@@ -1,461 +1,1016 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Mobile Cam & BG Color Changer</title>
-  
-  <!-- MediaPipe Selfie Segmentation & Camera Utils -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
-
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    body {
-      background: #0f172a;
-      color: #f8fafc;
-      min-height: 100vh;
-      min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      padding: env(safe-area-inset-top, 0.75rem) 0.75rem calc(env(safe-area-inset-bottom, 0.75rem) + 85px) 0.75rem;
-    }
-
-    header {
-      text-align: center;
-      padding: 0.5rem 0;
-    }
-
-    h1 {
-      font-size: 1.2rem;
-      font-weight: 700;
-    }
-
-    .main-content {
-      width: 100%;
-      max-width: 480px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      flex: 1;
-    }
-
-    .video-card {
-      background: #1e293b;
-      border-radius: 14px;
-      padding: 0.65rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0 0.2rem;
-    }
-
-    .card-header span {
-      font-size: 0.75rem;
-      color: #94a3b8;
-      text-transform: uppercase;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-    }
-
-    /* Processed live output canvas */
-    canvas#outputCanvas {
-      width: 100%;
-      aspect-ratio: 4 / 3;
-      background: #020617;
-      border-radius: 10px;
-      object-fit: cover;
-    }
-
-    video#recordedPlayback {
-      width: 100%;
-      aspect-ratio: 4 / 3;
-      background: #020617;
-      border-radius: 10px;
-      object-fit: cover;
-    }
-
-    /* Hidden raw camera element */
-    #rawVideo {
-      display: none;
-    }
-
-    /* Color Selection Bar */
-    .bg-controls {
-      background: #1e293b;
-      border-radius: 14px;
-      padding: 0.65rem 0.85rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .bg-controls-title {
-      font-size: 0.75rem;
-      color: #94a3b8;
-      text-transform: uppercase;
-      font-weight: 600;
-    }
-
-    .palette {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      overflow-x: auto;
-      padding-bottom: 2px;
-    }
-
-    .swatch {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: transform 0.15s ease, border-color 0.15s ease;
-    }
-
-    .swatch.active {
-      border-color: #38bdf8;
-      transform: scale(1.15);
-    }
-
-    .custom-color-wrapper {
-      position: relative;
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      overflow: hidden;
-      flex-shrink: 0;
-      border: 2px dashed #475569;
-    }
-
-    .custom-color-wrapper input[type="color"] {
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      cursor: pointer;
-      border: none;
-    }
-
-    .status-bar {
-      font-size: 0.8rem;
-      color: #94a3b8;
-      text-align: center;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.35rem;
-      min-height: 1.5rem;
-    }
-
-    .recording-dot {
-      width: 8px;
-      height: 8px;
-      background: #ef4444;
-      border-radius: 50%;
-      animation: pulse 1s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-
-    /* Fixed thumb-accessible bottom action bar */
-    .action-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(15, 23, 42, 0.95);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      padding: 0.6rem 0.75rem calc(env(safe-area-inset-bottom, 0.6rem) + 0.2rem);
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.5rem;
-      max-width: 480px;
-      margin: 0 auto;
-      border-top: 1px solid #334155;
-      z-index: 100;
-    }
-
-    button.btn {
-      touch-action: manipulation;
-      min-height: 46px;
-      border-radius: 10px;
-      border: none;
-      font-weight: 600;
-      font-size: 0.9rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.1s ease, opacity 0.15s ease;
-    }
-
-    button.btn:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
-    button.btn:disabled {
-      opacity: 0.35;
-      cursor: not-allowed;
-    }
-
-    .btn-camera { background: #2563eb; color: #fff; }
-    .btn-record { background: #ef4444; color: #fff; }
-    .btn-stop { background: #475569; color: #fff; }
-    .btn-save { background: #10b981; color: #fff; grid-column: span 2; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prana & Chetana | प्राण एवं चेतना</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', 'Noto Sans Devanagari', sans-serif;
+            transition: background-color 0.35s ease, color 0.35s ease;
+        }
+        h1, h2, h3, .serif-title {
+            font-family: 'Cinzel', 'Noto Sans Devanagari', serif;
+        }
+        /* White / Light Theme Background (Default) */
+        .theme-bg {
+            background-color: #fcfbf7;
+            background-image: radial-gradient(circle at 50% 12%, rgba(245, 158, 11, 0.12) 0%, rgba(168, 85, 247, 0.05) 45%, rgba(252, 251, 247, 1) 80%);
+            color: #1e293b;
+        }
+        /* Dark Theme Override */
+        .dark .theme-bg {
+            background-color: #0b0914;
+            background-image: radial-gradient(circle at 50% 20%, rgba(124, 58, 237, 0.18) 0%, rgba(217, 119, 6, 0.08) 45%, rgba(11, 9, 20, 1) 80%);
+            color: #e2e8f0;
+        }
+        /* Adaptive Cards */
+        .sacred-card {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(217, 119, 6, 0.18);
+            box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.06);
+            transition: all 0.3s ease;
+        }
+        .sacred-card:hover {
+            border-color: rgba(217, 119, 6, 0.5);
+            transform: translateY(-4px);
+            box-shadow: 0 14px 34px -10px rgba(217, 119, 6, 0.16);
+        }
+        .dark .sacred-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: none;
+        }
+        .dark .sacred-card:hover {
+            border-color: rgba(245, 158, 11, 0.4);
+            box-shadow: 0 10px 30px -10px rgba(245, 158, 11, 0.15);
+        }
+        .aura-ring {
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.4s ease;
+            pointer-events: none;
+        }
+        @keyframes pulse-slow {
+            0%, 100% { transform: scale(1); opacity: 0.85; }
+            50% { transform: scale(1.06); opacity: 1; }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 6s infinite ease-in-out;
+        }
+        /* Language Switching Visibility */
+        html[data-lang="en"] .lang-hi { display: none !important; }
+        html[data-lang="hi"] .lang-en { display: none !important; }
+    </style>
 </head>
-<body>
+<body class="theme-bg min-h-screen overflow-hidden selection:bg-amber-500 selection:text-white" id="main-body">
 
-  <header>
-    <h1>AI Background Changer & Recorder</h1>
-  </header>
+    <!-- FULL-SCREEN STARTING LANGUAGE SELECTION OVERLAY -->
+    <div id="welcome-gate" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#fcfbf7] dark:bg-[#0b0914] transition-opacity duration-500">
+        <!-- Subtle ambient glow -->
+        <div class="absolute w-[420px] h-[420px] rounded-full bg-amber-400/20 blur-3xl pointer-events-none"></div>
+        
+        <div class="relative z-10 max-w-xl w-full sacred-card rounded-3xl p-8 sm:p-12 text-center border-2 border-amber-500/30 shadow-2xl">
+            <div class="w-20 h-20 mx-auto mb-5 rounded-full bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/50 flex items-center justify-center text-4xl text-amber-600 dark:text-amber-400 animate-pulse-slow">
+                ॐ
+            </div>
 
-  <!-- Raw hidden video element for MediaPipe input -->
-  <video id="rawVideo" playsinline webkit-playsinline muted></video>
+            <p class="text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2">
+                Welcome • स्वागतम्
+            </p>
+            <h1 class="text-2xl sm:text-4xl font-extrabold text-slate-900 dark:text-white mb-2">
+                PRANA & CHETANA
+            </h1>
+            <p class="text-lg sm:text-xl font-bold text-amber-700 dark:text-amber-300 mb-4">
+                प्राण एवं चेतना — आसन से मोक्ष तक की यात्रा
+            </p>
+            <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
+                Select your preferred language to explore Asana, Mudra, Dhyan, Nadis, Chakras, Kundalini, Vishwa Urja, 12 Aura Circles, Mantra Jaap & Moksha.<br>
+                <span class="text-slate-500 dark:text-slate-400">वेबपेज में प्रवेश करने के लिए अपनी भाषा चुनें:</span>
+            </p>
 
-  <div class="main-content">
-    <!-- Live Canvas (Output) -->
-    <div class="video-card">
-      <div class="card-header">
-        <span>Processed Live Preview</span>
-      </div>
-      <canvas id="outputCanvas" width="640" height="480"></canvas>
-    </div>
+            <!-- Language Choice Buttons -->
+            <div class="grid sm:grid-cols-2 gap-4 mb-6">
+                <button onclick="enterSite('en')" class="group p-5 rounded-2xl border-2 border-amber-500/40 bg-white dark:bg-white/5 hover:bg-gradient-to-br hover:from-amber-500 hover:to-orange-600 hover:border-transparent transition-all duration-300 shadow-md text-center">
+                    <span class="block text-xs uppercase tracking-widest text-amber-700 dark:text-amber-400 group-hover:text-amber-100 font-bold mb-1">Continue in</span>
+                    <span class="block text-2xl font-extrabold text-slate-900 dark:text-white group-hover:text-white">English</span>
+                    <span class="block text-[11px] text-slate-500 dark:text-slate-400 group-hover:text-amber-100 mt-1">Sacred Science & Wisdom →</span>
+                </button>
 
-    <!-- Background Color Chooser -->
-    <div class="bg-controls">
-      <div class="bg-controls-title">Pick Background Color</div>
-      <div class="palette">
-        <!-- 'original' restores raw camera stream without solid color replacement -->
-        <button class="swatch active" data-color="original" style="background: linear-gradient(135deg, #475569 50%, #1e293b 50%);" title="Original"></button>
-        <button class="swatch" data-color="#00FF00" style="background: #00FF00;" title="Green Screen"></button>
-        <button class="swatch" data-color="#0066FF" style="background: #0066FF;" title="Blue Screen"></button>
-        <button class="swatch" data-color="#111827" style="background: #111827;" title="Matte Black"></button>
-        <button class="swatch" data-color="#F3F4F6" style="background: #F3F4F6;" title="Clean White"></button>
-        <button class="swatch" data-color="#7C3AED" style="background: #7C3AED;" title="Studio Purple"></button>
-        <div class="custom-color-wrapper" title="Pick Custom Color">
-          <input type="color" id="customColorPicker" value="#FF5733">
+                <button onclick="enterSite('hi')" class="group p-5 rounded-2xl border-2 border-amber-500/40 bg-white dark:bg-white/5 hover:bg-gradient-to-br hover:from-amber-500 hover:to-orange-600 hover:border-transparent transition-all duration-300 shadow-md text-center">
+                    <span class="block text-xs uppercase tracking-widest text-amber-700 dark:text-amber-400 group-hover:text-amber-100 font-bold mb-1">भाषा चुनें</span>
+                    <span class="block text-2xl font-extrabold text-slate-900 dark:text-white group-hover:text-white">हिन्दी (Hindi)</span>
+                    <span class="block text-[11px] text-slate-500 dark:text-slate-400 group-hover:text-amber-100 mt-1">आध्यात्मिक विज्ञान एवं ज्ञान →</span>
+                </button>
+            </div>
+
+            <p class="text-[11px] text-slate-400">
+                You can also switch between English & हिन्दी anytime from the top menu bar.
+            </p>
         </div>
-      </div>
     </div>
 
-    <!-- Recorded Preview -->
-    <div class="video-card">
-      <div class="card-header">
-        <span>Recorded Video Preview</span>
-      </div>
-      <video id="recordedPlayback" playsinline webkit-playsinline controls></video>
-    </div>
+    <!-- Sticky Navigation -->
+    <header class="fixed top-0 w-full z-50 bg-white/85 dark:bg-[#0b0914]/85 backdrop-blur-md border-b border-amber-900/10 dark:border-white/10 transition-colors">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <a href="#" class="flex items-center space-x-2">
+                <span class="text-2xl text-amber-600 dark:text-amber-400">ॐ</span>
+                <span class="serif-title font-bold text-base sm:text-lg tracking-wider bg-gradient-to-r from-amber-700 via-orange-600 to-purple-700 dark:from-amber-200 dark:via-amber-400 dark:to-purple-400 bg-clip-text text-transparent">
+                    <span class="lang-en">PRANA & CHETANA</span>
+                    <span class="lang-hi">प्राण एवं चेतना</span>
+                </span>
+            </a>
 
-    <div id="statusText" class="status-bar">Tap "Enable Camera" to load AI segmentation</div>
-  </div>
+            <nav class="hidden xl:flex space-x-6 text-sm font-medium text-slate-700 dark:text-slate-300">
+                <a href="#foundations" class="hover:text-amber-600 dark:hover:text-amber-400 transition">
+                    <span class="lang-en">Asana • Mudra • Dhyan</span>
+                    <span class="lang-hi">आसन • मुद्रा • ध्यान</span>
+                </a>
+                <a href="#anatomy" class="hover:text-amber-600 dark:hover:text-amber-400 transition">
+                    <span class="lang-en">Nadis & Chakras</span>
+                    <span class="lang-hi">नाड़ी एवं चक्र</span>
+                </a>
+                <a href="#kundalini" class="hover:text-amber-600 dark:hover:text-amber-400 transition">
+                    <span class="lang-en">Kundalini & Vishwa Urja</span>
+                    <span class="lang-hi">कुण्डलिनी एवं विश्व ऊर्जा</span>
+                </a>
+                <a href="#aura" class="hover:text-amber-600 dark:hover:text-amber-400 transition">
+                    <span class="lang-en">12 Circles of Aura</span>
+                    <span class="lang-hi">आभा मंडल के 12 चक्र</span>
+                </a>
+                <a href="#mantra" class="hover:text-amber-600 dark:hover:text-amber-400 transition">
+                    <span class="lang-en">Mantra Jaap</span>
+                    <span class="lang-hi">मंत्र जाप</span>
+                </a>
+                <a href="#moksha" class="text-amber-700 dark:text-amber-400 font-semibold hover:text-amber-600 transition">
+                    <span class="lang-en">Moksha</span>
+                    <span class="lang-hi">मोक्ष</span>
+                </a>
+            </nav>
 
-  <!-- Bottom Thumb Actions -->
-  <div class="action-bar">
-    <button id="cameraBtn" class="btn btn-camera">Enable Camera</button>
-    <button id="recordBtn" class="btn btn-record" disabled>Record</button>
-    <button id="stopBtn" class="btn btn-stop" disabled>Stop</button>
-    <button id="downloadBtn" class="btn btn-save" disabled>Save Recording</button>
-  </div>
+            <!-- Top Controls: Language Toggle + Theme Toggle -->
+            <div class="flex items-center gap-2">
+                <!-- Language Switcher Button -->
+                <button id="lang-toggle" onclick="toggleLanguage()" class="px-3.5 py-1.5 rounded-full text-xs font-bold border border-amber-500/50 bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-amber-900 dark:text-amber-300 hover:bg-amber-500/25 transition flex items-center gap-1.5 shadow-sm">
+                    <span>🌐</span>
+                    <span id="lang-toggle-text">हिन्दी में पढ़ें</span>
+                </button>
 
-  <script>
-    const rawVideo = document.getElementById('rawVideo');
-    const outputCanvas = document.getElementById('outputCanvas');
-    const ctx = outputCanvas.getContext('2d');
-    const recordedPlayback = document.getElementById('recordedPlayback');
-    const cameraBtn = document.getElementById('cameraBtn');
-    const recordBtn = document.getElementById('recordBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const statusText = document.getElementById('statusText');
-    const customColorPicker = document.getElementById('customColorPicker');
-    const swatches = document.querySelectorAll('.swatch');
+                <!-- Theme Switcher Button -->
+                <button id="theme-toggle" class="px-3.5 py-1.5 rounded-full text-xs font-semibold border border-amber-500/40 bg-amber-50/80 dark:bg-white/10 text-amber-900 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-white/20 transition flex items-center gap-1.5 shadow-sm">
+                    <span id="theme-icon">🌙</span>
+                    <span id="theme-label" class="hidden sm:inline">Dark Mode</span>
+                </button>
+            </div>
+        </div>
+    </header>
 
-    let stream = null;
-    let mediaRecorder = null;
-    let recordedChunks = [];
-    let activeBgColor = 'original';
-    let chosenMimeType = '';
+    <!-- Hero Section -->
+    <section class="relative pt-32 pb-20 px-4 text-center overflow-hidden">
+        <div class="max-w-4xl mx-auto relative z-10">
+            <div class="inline-block px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-600/30 text-amber-800 dark:text-amber-300 text-xs font-semibold uppercase tracking-widest mb-6">
+                <span class="lang-en">Ancient Wisdom • Subtle Science • Self-Realization</span>
+                <span class="lang-hi">प्राचीन ज्ञान • सूक्ष्म विज्ञान • आत्म-साक्षात्कार</span>
+            </div>
 
-    // Color Swatch Selection
-    swatches.forEach(swatch => {
-      swatch.addEventListener('click', () => {
-        swatches.forEach(s => s.classList.remove('active'));
-        swatch.classList.add('active');
-        activeBgColor = swatch.getAttribute('data-color');
-      });
-    });
+            <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-6 leading-tight">
+                <span class="lang-en">Awakening the <span class="bg-gradient-to-r from-amber-600 via-orange-600 to-purple-700 dark:from-amber-300 dark:via-orange-400 dark:to-purple-400 bg-clip-text text-transparent">Sacred Architecture</span> Within</span>
+                <span class="lang-hi">अंतर्मन की <span class="bg-gradient-to-r from-amber-600 via-orange-600 to-purple-700 dark:from-amber-300 dark:via-orange-400 dark:to-purple-400 bg-clip-text text-transparent">दिव्य ऊर्जा एवं चेतना</span> का जागरण</span>
+            </h1>
 
-    customColorPicker.addEventListener('input', (e) => {
-      swatches.forEach(s => s.classList.remove('active'));
-      activeBgColor = e.target.value;
-    });
+            <p class="text-lg sm:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
+                <span class="lang-en">
+                    Explore the complete spiritual continuum: from aligning the physical vessel through <strong class="text-amber-700 dark:text-amber-300 font-semibold">Asana</strong> and <strong class="text-amber-700 dark:text-amber-300 font-semibold">Mudra</strong>, awakening <strong class="text-amber-700 dark:text-amber-300 font-semibold">Nadis, Chakras, and Kundalini</strong>, expanding the <strong class="text-amber-700 dark:text-amber-300 font-semibold">12-Circle Aura</strong>, to attaining <strong class="text-amber-700 dark:text-amber-300 font-semibold">Moksha</strong>.
+                </span>
+                <span class="lang-hi">
+                    संपूर्ण आध्यात्मिक यात्रा को समझें: <strong class="text-amber-700 dark:text-amber-300 font-semibold">आसन</strong> और <strong class="text-amber-700 dark:text-amber-300 font-semibold">मुद्रा</strong> द्वारा शरीर के संतुलन से लेकर <strong class="text-amber-700 dark:text-amber-300 font-semibold">नाड़ी, चक्र, कुण्डलिनी</strong> और <strong class="text-amber-700 dark:text-amber-300 font-semibold">विश्व ऊर्जा</strong> के जागरण, <strong class="text-amber-700 dark:text-amber-300 font-semibold">12 आभा मंडल</strong> के विस्तार, <strong class="text-amber-700 dark:text-amber-300 font-semibold">मंत्र जाप</strong> तथा परम लक्ष्य <strong class="text-amber-700 dark:text-amber-300 font-semibold">मोक्ष</strong> की प्राप्ति तक।
+                </span>
+            </p>
 
-    // 1. Initialize MediaPipe SelfieSegmentation
-    const selfieSegmentation = new SelfieSegmentation({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
-    });
+            <div class="flex flex-wrap justify-center gap-4">
+                <a href="#foundations" class="px-8 py-3.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold hover:from-amber-600 hover:to-orange-700 transition shadow-lg shadow-amber-500/25">
+                    <span class="lang-en">Begin the Journey</span>
+                    <span class="lang-hi">यात्रा प्रारंभ करें</span>
+                </a>
+                <a href="#aura" class="px-8 py-3.5 rounded-full sacred-card text-slate-800 dark:text-white hover:text-amber-700 dark:hover:text-amber-300 font-semibold">
+                    <span class="lang-en">Explore the 12 Aura Circles</span>
+                    <span class="lang-hi">आभा मंडल के 12 घेरे देखें</span>
+                </a>
+            </div>
+        </div>
+    </section>
 
-    selfieSegmentation.setOptions({
-      modelSelection: 1 // 0: general, 1: landscape/selfie (optimized for real-time mobile inference)
-    });
+    <!-- 1. Foundations: Asana, Mudra, Dhyan -->
+    <section id="foundations" class="py-20 px-4 max-w-7xl mx-auto">
+        <div class="text-center mb-16">
+            <span class="text-amber-700 dark:text-amber-400 text-xs font-bold uppercase tracking-widest">
+                <span class="lang-en">Stage I: Preparation of the Vessel</span>
+                <span class="lang-hi">प्रथम चरण : शरीर एवं प्राण की शुद्धि</span>
+            </span>
+            <h2 class="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mt-2">
+                <span class="lang-en">Asana, Mudra & Dhyan</span>
+                <span class="lang-hi">आसन, मुद्रा एवं ध्यान</span>
+            </h2>
+            <p class="text-slate-600 dark:text-slate-400 mt-3 max-w-2xl mx-auto">
+                <span class="lang-en">Before high-voltage cosmic energy can flow safely through the body, the physical nervous system and pranic circuits must be purified and stabilized.</span>
+                <span class="lang-hi">शरीर में उच्च आध्यात्मिक एवं ब्रह्माण्डीय ऊर्जा के सुरक्षित प्रवाह से पूर्व नाड़ी तंत्र और प्राणिक परिपथ का स्थिर व शुद्ध होना अनिवार्य है।</span>
+            </p>
+        </div>
 
-    // 2. Render Results onto Canvas
-    selfieSegmentation.onResults((results) => {
-      ctx.save();
-      ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+        <div class="grid md:grid-cols-3 gap-8">
+            <!-- Asana -->
+            <div class="sacred-card rounded-2xl p-8 relative overflow-hidden">
+                <div class="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-2xl mb-6">🧘</div>
+                <h3 class="text-2xl font-bold text-amber-800 dark:text-amber-300 mb-2">
+                    <span class="lang-en">1. Asana (आसन)</span>
+                    <span class="lang-hi">1. आसन (Asana)</span>
+                </h3>
+                <p class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4 font-semibold">
+                    <span class="lang-en">"Sthiram Sukham Asanam" — Steady Posture</span>
+                    <span class="lang-hi">"स्थिरसुखमासनम्" — स्थिर एवं सुखद बैठक</span>
+                </p>
+                <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed mb-4">
+                    <span class="lang-en">In higher yogic science, Asana is not mere physical exercise—it is the geometric alignment of the spine so that life-force (Prana) flows unimpeded without physical friction.</span>
+                    <span class="lang-hi">योग विज्ञान में आसन केवल शारीरिक व्यायाम नहीं है, बल्कि रीढ़ की हड्डी (मेरुदंड) को सीधा और संरेखित करने की कला है ताकि प्राण ऊर्जा बिना किसी अवरोध के प्रवाहित हो सके।</span>
+                </p>
+                <ul class="text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-white/10 pt-4">
+                    <li class="lang-en"><strong class="text-amber-700 dark:text-amber-400">Siddhasana / Padmasana:</strong> Locks energy at the base and keeps the spine erect like Mount Meru.</li>
+                    <li class="lang-en"><strong class="text-amber-700 dark:text-amber-400">Purpose:</strong> Removes muscular knots (Granthis) and stabilizes cellular restlessness.</li>
+                    <li class="lang-hi"><strong class="text-amber-700 dark:text-amber-400">सिद्धासन / पद्मासन:</strong> मूलाधार में ऊर्जा को लॉक करता है और मेरुदंड को सुमेरु पर्वत के समान अटल रखता है।</li>
+                    <li class="lang-hi"><strong class="text-amber-700 dark:text-amber-400">उद्देश्य:</strong> शारीरिक ग्रंथियों को खोलना और मन की चंचलता को शांत करना।</li>
+                </ul>
+            </div>
 
-      // Mirror horizontally for selfie orientation
-      ctx.translate(outputCanvas.width, 0);
-      ctx.scale(-1, 1);
+            <!-- Mudra -->
+            <div class="sacred-card rounded-2xl p-8 relative overflow-hidden">
+                <div class="w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-500/40 flex items-center justify-center text-2xl mb-6">🙏</div>
+                <h3 class="text-2xl font-bold text-purple-800 dark:text-purple-300 mb-2">
+                    <span class="lang-en">2. Mudra (मुद्रा)</span>
+                    <span class="lang-hi">2. मुद्रा (Mudra)</span>
+                </h3>
+                <p class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4 font-semibold">
+                    <span class="lang-en">Pranic Circuit Seals & Elemental Locks</span>
+                    <span class="lang-hi">प्राण ऊर्जा का संरक्षण एवं पंचतत्व संतुलन</span>
+                </p>
+                <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed mb-4">
+                    <span class="lang-en">The hands and body endings constantly leak bio-electric energy. Mudras act as subtle switches that redirect escaping Prana back into the central nervous system and balance the 5 elements.</span>
+                    <span class="lang-hi">हाथों की उंगलियों के पोरों से निरंतर प्राण-ऊर्जा बाहर निकलती रहती है। मुद्राएं सूक्ष्म स्विच की तरह कार्य करती हैं जो पंचतत्वों को संतुलित कर प्राण को वापस सुषुम्ना की ओर मोड़ती हैं।</span>
+                </p>
+                <ul class="text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-white/10 pt-4">
+                    <li class="lang-en"><strong class="text-purple-700 dark:text-purple-400">Gyan Mudra:</strong> Connects individual consciousness (index) with universal consciousness (thumb).</li>
+                    <li class="lang-en"><strong class="text-purple-700 dark:text-purple-400">Khechari & Shambhavi:</strong> Higher neuro-energetic seals that awaken the pineal gland.</li>
+                    <li class="lang-hi"><strong class="text-purple-700 dark:text-purple-400">ज्ञान मुद्रा:</strong> जीवात्मा (तर्जनी) को परमात्मा/अग्नि तत्व (अंगूठे) से जोड़कर एकाग्रता बढ़ाती है।</li>
+                    <li class="lang-hi"><strong class="text-purple-700 dark:text-purple-400">खेचरी एवं शाम्भवी मुद्रा:</strong> आज्ञा चक्र और पीनियल ग्रंथि को जाग्रत करने वाली उच्च योग मुद्राएं।</li>
+                </ul>
+            </div>
 
-      if (activeBgColor === 'original') {
-        // Draw original video feed directly
-        ctx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
-      } else {
-        // Draw segmentation mask
-        ctx.drawImage(results.segmentationMask, 0, 0, outputCanvas.width, outputCanvas.height);
+            <!-- Dhyan -->
+            <div class="sacred-card rounded-2xl p-8 relative overflow-hidden">
+                <div class="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/40 flex items-center justify-center text-2xl mb-6">✨</div>
+                <h3 class="text-2xl font-bold text-cyan-800 dark:text-cyan-300 mb-2">
+                    <span class="lang-en">3. Dhyan (ध्यान)</span>
+                    <span class="lang-hi">3. ध्यान (Dhyan)</span>
+                </h3>
+                <p class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4 font-semibold">
+                    <span class="lang-en">Unbroken Flow of Pure Awareness</span>
+                    <span class="lang-hi">निर्विकल्प साक्षी भाव एवं अखंड जागरूकता</span>
+                </p>
+                <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed mb-4">
+                    <span class="lang-en">Dhyan is not forced concentration; it is the state of effortless witnessing where the observer, the process of observation, and the object merge into silence.</span>
+                    <span class="lang-hi">ध्यान बलपूर्वक की गई एकाग्रता नहीं है, बल्कि विचारों के शांत हो जाने पर शुद्ध साक्षी भाव में स्थित होना है—जहाँ ध्याता, ध्यान और ध्येय एक हो जाते हैं।</span>
+                </p>
+                <ul class="text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-white/10 pt-4">
+                    <li class="lang-en"><strong class="text-cyan-700 dark:text-cyan-400">Brainwave Shift:</strong> Transitions the mind from Beta (stress) to Alpha, Theta, and high-frequency Gamma states.</li>
+                    <li class="lang-en"><strong class="text-cyan-700 dark:text-cyan-400">Outcome:</strong> Opens the crown gateway to receive Vishwa Urja (Cosmic Energy).</li>
+                    <li class="lang-hi"><strong class="text-cyan-700 dark:text-cyan-400">मस्तिष्क तरंग परिवर्तन:</strong> मन को बीटा (तनाव) से अल्फा, थीटा और उच्च गामा तरंगों में ले जाता है।</li>
+                    <li class="lang-hi"><strong class="text-cyan-700 dark:text-cyan-400">परिणाम:</strong> सहस्रार चक्र खुलता है जिससे शरीर में 'विश्व ऊर्जा' का अवतरण होता है।</li>
+                </ul>
+            </div>
+        </div>
+    </section>
 
-        // Keep only overlapping pixels with the video feed (the person)
-        ctx.globalCompositeOperation = 'source-in';
-        ctx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
+    <!-- 2. Subtle Anatomy: Nadis & Chakras -->
+    <section id="anatomy" class="py-20 px-4 bg-amber-50/50 dark:bg-white/[0.02] border-y border-amber-900/10 dark:border-white/5 transition-colors">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <span class="text-purple-700 dark:text-purple-400 text-xs font-bold uppercase tracking-widest">
+                    <span class="lang-en">Stage II: The Subtle Energy Body (Pranamaya Kosha)</span>
+                    <span class="lang-hi">द्वितीय चरण : सूक्ष्म प्राणमय कोष</span>
+                </span>
+                <h2 class="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mt-2">
+                    <span class="lang-en">72,000 Nadis & The 7 Chakras</span>
+                    <span class="lang-hi">72,000 नाड़ियाँ एवं 7 मुख्य चक्र</span>
+                </h2>
+                <p class="text-slate-600 dark:text-slate-400 mt-3 max-w-2xl mx-auto">
+                    <span class="lang-en">Just as arteries carry blood, <strong class="text-slate-900 dark:text-white">Nadis</strong> are astral pathways that carry Prana. Where multiple Nadis intersect, spinning vortices of consciousness called <strong class="text-slate-900 dark:text-white">Chakras</strong> are formed.</span>
+                    <span class="lang-hi">जिस प्रकार नसें रक्त का प्रवाह करती हैं, उसी प्रकार <strong class="text-slate-900 dark:text-white">नाड़ियाँ</strong> सूक्ष्म शरीर में प्राण का संचार करती हैं। जहाँ प्रमुख नाड़ियाँ मिलती हैं, वहाँ ऊर्जा के भंवर बनते हैं जिन्हें <strong class="text-slate-900 dark:text-white">चक्र</strong> कहा जाता है।</span>
+                </p>
+            </div>
 
-        // Draw solid background underneath the person
-        ctx.globalCompositeOperation = 'destination-over';
-        ctx.fillStyle = activeBgColor;
-        ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
-      }
+            <!-- The 3 Principal Nadis -->
+            <div class="grid md:grid-cols-3 gap-6 mb-16">
+                <div class="sacred-card p-6 rounded-xl border-l-4 border-l-blue-500">
+                    <h4 class="text-lg font-bold text-blue-800 dark:text-blue-300">
+                        <span class="lang-en">Ida Nadi (Chandra / Lunar)</span>
+                        <span class="lang-hi">इड़ा नाड़ी (चंद्र स्वर)</span>
+                    </h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">
+                        <span class="lang-en">Left Nostril • Feminine • Cooling • Parasympathetic</span>
+                        <span class="lang-hi">बायां स्वर • शीतल • मन एवं रचनात्मकता</span>
+                    </p>
+                    <p class="text-sm text-slate-700 dark:text-slate-300">
+                        <span class="lang-en">Originates at Muladhara, spirals up to the left nostril and right brain hemisphere. Governs mental energy, introspection, creativity, and calmness.</span>
+                        <span class="lang-hi">मूलाधार से निकलकर बाईं नासिका और दाएं मस्तिष्क तक जाती है। यह शरीर को शीतलता, मानसिक शांति, अंतर्मुखता और विश्राम प्रदान करती है।</span>
+                    </p>
+                </div>
 
-      ctx.restore();
-    });
+                <div class="sacred-card p-6 rounded-xl border-l-4 border-l-amber-500 bg-amber-500/5">
+                    <h4 class="text-lg font-bold text-amber-800 dark:text-amber-300">
+                        <span class="lang-en">Sushumna Nadi (Central Channel)</span>
+                        <span class="lang-hi">सुषुम्ना नाड़ी (मध्य मार्ग / ब्रह्म पथ)</span>
+                    </h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">
+                        <span class="lang-en">Spinal Axis • Transcendental • Highway of Liberation</span>
+                        <span class="lang-hi">मेरुदंड केंद्र • कुण्डलिनी एवं मोक्ष का राजमार्ग</span>
+                    </p>
+                    <p class="text-sm text-slate-700 dark:text-slate-300">
+                        <span class="lang-en">Runs directly through the center of the spinal cord from the base to the crown. Remains dormant until Ida and Pingala are balanced through Pranayama and Dhyan.</span>
+                        <span class="lang-hi">रीढ़ के बिल्कुल मध्य से मूलाधार से सहस्रार तक जाती है। जब प्राणायाम व ध्यान से इड़ा और पिंगला संतुलित होती हैं, तब सुषुम्ना जाग्रत होती है।</span>
+                    </p>
+                </div>
 
-    // 3. Enable Camera & Camera Pipeline
-    cameraBtn.addEventListener('click', async () => {
-      try {
-        statusText.textContent = 'Starting camera & downloading AI model...';
+                <div class="sacred-card p-6 rounded-xl border-l-4 border-l-red-500">
+                    <h4 class="text-lg font-bold text-red-800 dark:text-red-300">
+                        <span class="lang-en">Pingala Nadi (Surya / Solar)</span>
+                        <span class="lang-hi">पिंगला नाड़ी (सूर्य स्वर)</span>
+                    </h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">
+                        <span class="lang-en">Right Nostril • Masculine • Heating • Sympathetic</span>
+                        <span class="lang-hi">दायां स्वर • उष्ण • प्राणशक्ति एवं कर्मठता</span>
+                    </p>
+                    <p class="text-sm text-slate-700 dark:text-slate-300">
+                        <span class="lang-en">Spirals up ending at the right nostril and left brain hemisphere. Governs vitality, analytical thinking, digestion, and dynamic action.</span>
+                        <span class="lang-hi">दाईं नासिका और बाएं मस्तिष्क से जुड़ी यह नाड़ी शरीर में तेज, पाचन अग्नि, तार्किक शक्ति और बाहरी कर्मशीलता का संचालन करती है।</span>
+                    </p>
+                </div>
+            </div>
 
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: true
+            <!-- Interactive 7 Chakras Explorer -->
+            <div class="sacred-card rounded-2xl p-6 sm:p-10">
+                <h3 class="text-2xl font-bold text-center text-slate-900 dark:text-white mb-2">
+                    <span class="lang-en">Interactive 7 Chakra Matrix</span>
+                    <span class="lang-hi">सप्त चक्र परिचय (क्लिक करके विस्तार से जानें)</span>
+                </h3>
+                <p class="text-center text-xs text-slate-500 dark:text-slate-400 mb-8">
+                    <span class="lang-en">Click any Chakra below to inspect its Bija Mantra, Element, Location, and Spiritual Function</span>
+                    <span class="lang-hi">किसी भी चक्र पर क्लिक करके उसका बीज मंत्र, तत्व, स्थान और आध्यात्मिक कार्य देखें</span>
+                </p>
+
+                <div class="grid lg:grid-cols-12 gap-8 items-center">
+                    <div class="lg:col-span-5 space-y-2.5" id="chakra-buttons"></div>
+                    <div class="lg:col-span-7 sacred-card rounded-2xl p-8 border border-amber-500/40 min-h-[320px] flex flex-col justify-center" id="chakra-detail"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. Kundalini & Vishwa Urja -->
+    <section id="kundalini" class="py-20 px-4 max-w-7xl mx-auto">
+        <div class="grid lg:grid-cols-2 gap-12 items-center">
+            <!-- Kundalini Shakti -->
+            <div class="sacred-card rounded-2xl p-8 sm:p-10 border-t-4 border-t-orange-500">
+                <div class="inline-block px-3 py-1 rounded bg-orange-500/15 text-orange-800 dark:text-orange-300 text-xs font-bold uppercase mb-4">
+                    <span class="lang-en">Ascending Evolutionary Force</span>
+                    <span class="lang-hi">ऊर्ध्वगामी आत्मिक महाशक्ति</span>
+                </div>
+                <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                    <span class="lang-en">Kundalini Shakti (कुण्डलिनी शक्ति)</span>
+                    <span class="lang-hi">कुण्डलिनी शक्ति (Kundalini Shakti)</span>
+                </h2>
+                <p class="text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
+                    <span class="lang-en">Resting coiled three-and-a-half times at the base of the spine (Muladhara) lies <strong class="text-orange-700 dark:text-orange-300">Kundalini</strong>—the dormant primordial evolutionary energy within every human being.</span>
+                    <span class="lang-hi">रीढ़ के आधार (मूलाधार चक्र) में साढ़े तीन कुंडल मारकर सोई हुई आध्यात्मिक महाशक्ति को <strong class="text-orange-700 dark:text-orange-300">कुण्डलिनी</strong> कहते हैं। यह प्रत्येक मनुष्य के भीतर सुप्त दिव्य चेतना का खजाना है।</span>
+                </p>
+                <div class="space-y-4 text-sm text-slate-700 dark:text-slate-300">
+                    <div class="p-4 rounded-xl bg-amber-500/5 dark:bg-white/5 border border-amber-900/10 dark:border-transparent">
+                        <strong class="text-amber-800 dark:text-amber-300 block mb-1">
+                            <span class="lang-en">1. Piercing the Three Granthis (Psychic Knots):</span>
+                            <span class="lang-hi">1. तीन ग्रंथियों (गांठों) का भेदन:</span>
+                        </strong>
+                        <span class="lang-en">As Kundalini awakens and enters Sushumna Nadi, it unties <em>Brahma Granthi</em> (survival attachment), <em>Vishnu Granthi</em> (emotional ego), and <em>Rudra Granthi</em> (spiritual pride).</span>
+                        <span class="lang-hi">जाग्रत होकर जब यह सुषुम्ना में ऊपर उठती है, तो <em>ब्रह्म ग्रंथि</em> (भौतिक आसक्ति), <em>विष्णु ग्रंथि</em> (मोह व अहंकार) और <em>रुद्र ग्रंथि</em> (द्वैत भाव) को खोल देती है।</span>
+                    </div>
+                    <div class="p-4 rounded-xl bg-amber-500/5 dark:bg-white/5 border border-amber-900/10 dark:border-transparent">
+                        <strong class="text-amber-800 dark:text-amber-300 block mb-1">
+                            <span class="lang-en">2. Neuro-Spiritual Alchemy:</span>
+                            <span class="lang-hi">2. चक्रों का जागरण एवं रूपांतरण:</span>
+                        </strong>
+                        <span class="lang-en">As it ascends through each chakra, dormant regions of consciousness awaken—transforming base instincts into compassion, intuition, and cosmic perception.</span>
+                        <span class="lang-hi">जैसे-जैसे कुण्डलिनी प्रत्येक चक्र को भेदती है, मनुष्य की पाशविक वृत्तियाँ दिव्य करुणा, प्रज्ञा, अंतर्ज्ञान और असीम आनंद में रूपांतरित हो जाती हैं।</span>
+                    </div>
+                    <div class="p-4 rounded-xl bg-amber-500/5 dark:bg-white/5 border border-amber-900/10 dark:border-transparent">
+                        <strong class="text-amber-800 dark:text-amber-300 block mb-1">
+                            <span class="lang-en">3. Union of Shiva & Shakti:</span>
+                            <span class="lang-hi">3. शिव और शक्ति का महामिलन:</span>
+                        </strong>
+                        <span class="lang-en">When Kundalini (Shakti) reaches the Sahasrara Chakra at the crown, it merges with pure Supreme Consciousness (Shiva), flooding the body with <em>Amrita</em>.</span>
+                        <span class="lang-hi">जब कुण्डलिनी (शक्ति) सिर के शीर्ष पर सहस्रार चक्र में स्थित परम चेतना (शिव) से मिलती है, तब साधक को समाधि और अमृतत्व की अनुभूति होती है।</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vishwa Urja (Cosmic Energy) -->
+            <div class="sacred-card rounded-2xl p-8 sm:p-10 border-t-4 border-t-cyan-500">
+                <div class="inline-block px-3 py-1 rounded bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 text-xs font-bold uppercase mb-4">
+                    <span class="lang-en">Descending Universal Grace</span>
+                    <span class="lang-hi">अवतरित होती ब्रह्माण्डीय महाप्राण</span>
+                </div>
+                <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                    <span class="lang-en">Vishwa Urja (विश्व ऊर्जा - Cosmic Energy)</span>
+                    <span class="lang-hi">विश्व ऊर्जा (Vishwa Urja - कॉस्मिक एनर्जी)</span>
+                </h2>
+                <p class="text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
+                    <span class="lang-en">We swim in an infinite ocean of <strong class="text-cyan-700 dark:text-cyan-300">Vishwa Urja</strong> (Mahaprana). While food and breath provide secondary energy, Vishwa Urja is the direct source that sustains galaxies and cellular consciousness alike.</span>
+                    <span class="lang-hi">हम चारों ओर से अनंत <strong class="text-cyan-700 dark:text-cyan-300">विश्व ऊर्जा (महाप्राण)</strong> के महासागर से घिरे हैं। भोजन और श्वास तो केवल माध्यम हैं; संपूर्ण ब्रह्माण्ड और हमारी प्रत्येक कोशिका का मूल आधार यही विश्व ऊर्जा है।</span>
+                </p>
+                <div class="space-y-4 text-sm text-slate-700 dark:text-slate-300">
+                    <div class="p-4 rounded-xl bg-cyan-500/5 dark:bg-white/5 border border-cyan-900/10 dark:border-transparent">
+                        <strong class="text-cyan-800 dark:text-cyan-300 block mb-1">
+                            <span class="lang-en">How It Enters the Body:</span>
+                            <span class="lang-hi">शरीर में प्रवेश का द्वार:</span>
+                        </strong>
+                        <span class="lang-en">Vishwa Urja enters primarily through the <em>Brahmarandhra</em> (Sahasrara Crown) when the mind becomes completely still and thought-free during deep Dhyan.</span>
+                        <span class="lang-hi">जब ध्यान में मन पूर्णतः निर्विचार और शांत होता है, तब सहस्रार चक्र (ब्रह्मरंध्र) से यह विश्व ऊर्जा झरने की भांति शरीर के भीतर प्रवाहित होती है।</span>
+                    </div>
+                    <div class="p-4 rounded-xl bg-cyan-500/5 dark:bg-white/5 border border-cyan-900/10 dark:border-transparent">
+                        <strong class="text-cyan-800 dark:text-cyan-300 block mb-1">
+                            <span class="lang-en">Why Most People Block It:</span>
+                            <span class="lang-hi">ऊर्जा प्रवाह में रुकावट का कारण:</span>
+                        </strong>
+                        <span class="lang-en">Constant overthinking, stress, anger, and erratic breathing create static interference around the crown, starving the subtle body of cosmic vitality.</span>
+                        <span class="lang-hi">अत्यधिक सोच-विचार, तनाव, क्रोध और नकारात्मकता हमारे सहस्रार चक्र के द्वार को अवरुद्ध कर देते हैं, जिससे व्यक्ति थका हुआ और निस्तेज महसूस करता है।</span>
+                    </div>
+                    <div class="p-4 rounded-xl bg-cyan-500/5 dark:bg-white/5 border border-cyan-900/10 dark:border-transparent">
+                        <strong class="text-cyan-800 dark:text-cyan-300 block mb-1">
+                            <span class="lang-en">Signs of High Vishwa Urja Absorption:</span>
+                            <span class="lang-hi">विश्व ऊर्जा से भरपूर व्यक्ति के लक्षण:</span>
+                        </strong>
+                        <span class="lang-en">Need for less sleep yet overflowing vitality, effortless emotional peace, accelerated self-healing, and a magnetic, soothing aura.</span>
+                        <span class="lang-hi">कम नींद में भी अद्भुत स्फूर्ति, रोग-प्रतिरोधक क्षमता में वृद्धि, चेहरे पर दिव्य तेज, गहरी मानसिक शांति और आकर्षक आभा मंडल।</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. The 12 Circles of Aura -->
+    <section id="aura" class="py-20 px-4 bg-amber-50/50 dark:bg-white/[0.02] border-y border-amber-900/10 dark:border-white/5 transition-colors">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-14">
+                <span class="text-amber-700 dark:text-amber-400 text-xs font-bold uppercase tracking-widest">
+                    <span class="lang-en">Stage III: The Luminous Bio-Energetic Field (Prabhamandal)</span>
+                    <span class="lang-hi">तृतीय चरण : तेजस एवं प्रभामंडल (Aura)</span>
+                </span>
+                <h2 class="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mt-2">
+                    <span class="lang-en">The 12 Circles of the Aura</span>
+                    <span class="lang-hi">आभा मंडल (Aura) के 12 ऊर्जा घेरे</span>
+                </h2>
+                <p class="text-slate-600 dark:text-slate-400 mt-3 max-w-3xl mx-auto">
+                    <span class="lang-en">Beyond the physical skin radiates the <strong class="text-slate-900 dark:text-white">Prabhamandal (Aura)</strong>—organized into 12 concentric spheres of vibration. As your Sadhana deepens, your energy expands from the inner survival rings to the 12th ring of cosmic illumination.</span>
+                    <span class="lang-hi">हमारे भौतिक शरीर के चारों ओर प्रकाश और ऊर्जा के 12 सूक्ष्म घेरे होते हैं जिन्हें <strong class="text-slate-900 dark:text-white">प्रभामंडल या आभा मंडल (Aura)</strong> कहा जाता है। जैसे-जैसे आसन, ध्यान और मंत्र जाप बढ़ता है, हमारी ऊर्जा पहले घेरे से विस्तारित होकर 12वें मोक्ष घेरे तक जाग्रत हो जाती है।</span>
+                </p>
+            </div>
+
+            <div class="grid lg:grid-cols-12 gap-10 items-center">
+                <!-- Interactive Visual Concentric Circles -->
+                <div class="lg:col-span-5 flex flex-col items-center justify-center">
+                    <div class="relative w-80 h-80 sm:w-96 sm:h-96 flex items-center justify-center rounded-full bg-white/70 dark:bg-transparent shadow-inner border border-amber-500/20" id="aura-visualizer">
+                        <div class="z-20 text-center bg-white dark:bg-[#0b0914]/90 px-4 py-3 rounded-full border border-amber-500/50 shadow-md">
+                            <span class="text-2xl">🧘‍♂️</span>
+                            <p class="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
+                                <span class="lang-en">Atman Core</span>
+                                <span class="lang-hi">आत्म-केंद्र</span>
+                            </p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-4 text-center">
+                        <span class="lang-en">Click or hover over any of the 12 Aura Circles on the right to highlight its sphere.</span>
+                        <span class="lang-hi">दाईं ओर दिए गए किसी भी आभा घेरे (1 से 12) पर क्लिक करें।</span>
+                    </p>
+                </div>
+
+                <!-- 12 Circles Grid -->
+                <div class="lg:col-span-7">
+                    <div class="grid sm:grid-cols-2 gap-3" id="aura-list"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. Mantra Jaap & Its Scientific/Spiritual Effects -->
+    <section id="mantra" class="py-20 px-4 max-w-7xl mx-auto">
+        <div class="text-center mb-16">
+            <span class="text-purple-700 dark:text-purple-400 text-xs font-bold uppercase tracking-widest">
+                <span class="lang-en">Stage IV: Sonic Alchemy (Nada Brahma)</span>
+                <span class="lang-hi">चतुर्थ चरण : नाद ब्रह्म एवं मंत्र विज्ञान</span>
+            </span>
+            <h2 class="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mt-2">
+                <span class="lang-en">Mantra Jaap & Its Profound Effects</span>
+                <span class="lang-hi">मंत्र जाप एवं उसके अद्भुत प्रभाव</span>
+            </h2>
+            <p class="text-slate-600 dark:text-slate-400 mt-3 max-w-2xl mx-auto">
+                <span class="lang-en"><em>"Mananat Trayate Iti Mantrah"</em> — That which protects and liberates the mind through rhythmic repetition is a Mantra.</span>
+                <span class="lang-hi"><em>"मननात् त्रायते इति मंत्रः"</em> — जिसके निरंतर मनन और जाप से मन की रक्षा हो और बंधनों से मुक्ति मिले, वही मंत्र है।</span>
+            </p>
+        </div>
+
+        <!-- 4 Levels of Jaap -->
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-14">
+            <div class="sacred-card p-6 rounded-xl">
+                <span class="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase">
+                    <span class="lang-en">Level 1 • Audible</span>
+                    <span class="lang-hi">प्रथम स्तर • बोलकर</span>
+                </span>
+                <h4 class="text-xl font-bold text-slate-900 dark:text-white mt-1 mb-2">
+                    <span class="lang-en">Vaikhari Jaap</span>
+                    <span class="lang-hi">वैखरी जाप</span>
+                </h4>
+                <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    <span class="lang-en">Chanting aloud with clear pronunciation. Purifies the surrounding environment, vibrates the physical skull/vagus nerve, and anchors a wandering mind.</span>
+                    <span class="lang-hi">स्पष्ट स्वर में बोलकर किया जाने वाला जाप। यह आसपास के वातावरण को शुद्ध करता है, वेगस नर्व को सक्रिय करता है और भटकते मन को स्थिर करता है।</span>
+                </p>
+            </div>
+
+            <div class="sacred-card p-6 rounded-xl">
+                <span class="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase">
+                    <span class="lang-en">Level 2 • Whisper</span>
+                    <span class="lang-hi">द्वितीय स्तर • उपांशु</span>
+                </span>
+                <h4 class="text-xl font-bold text-slate-900 dark:text-white mt-1 mb-2">
+                    <span class="lang-en">Upanshu Jaap</span>
+                    <span class="lang-hi">उपांशु जाप</span>
+                </h4>
+                <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    <span class="lang-en">Lips and tongue move subtly with a soft hum audible only to the practitioner. 10x more subtle and potent than audible chanting.</span>
+                    <span class="lang-hi">इसमें केवल होंठ और जीभ हिलते हैं और ध्वनि केवल साधक को सुनाई देती है। यह वैखरी जाप से 10 गुना अधिक प्रभावशाली और सूक्ष्म माना गया है।</span>
+                </p>
+            </div>
+
+            <div class="sacred-card p-6 rounded-xl">
+                <span class="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase">
+                    <span class="lang-en">Level 3 • Mental</span>
+                    <span class="lang-hi">तृतीय स्तर • मानसिक</span>
+                </span>
+                <h4 class="text-xl font-bold text-slate-900 dark:text-white mt-1 mb-2">
+                    <span class="lang-en">Manasika Jaap</span>
+                    <span class="lang-hi">मानसिक जाप</span>
+                </h4>
+                <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    <span class="lang-en">Purely mental repetition synchronized with the breath. Directly reprograms the subconscious (Chitta) and awakens the Chakras and Nadis.</span>
+                    <span class="lang-hi">बिना जीभ हिलाए केवल मन और श्वास के साथ मंत्र का स्मरण। यह सीधे अवचेतन मन (चित्त) के संस्कारों को शुद्ध कर चक्रों को जाग्रत करता है।</span>
+                </p>
+            </div>
+
+            <div class="sacred-card p-6 rounded-xl border-amber-500/50 bg-amber-500/10 dark:bg-amber-500/5">
+                <span class="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase">
+                    <span class="lang-en">Level 4 • Unstruck</span>
+                    <span class="lang-hi">चतुर्थ स्तर • अजपा</span>
+                </span>
+                <h4 class="text-xl font-bold text-amber-800 dark:text-amber-300 mt-1 mb-2">
+                    <span class="lang-en">Ajapa Jaap</span>
+                    <span class="lang-hi">अजपा जाप (सोऽहं)</span>
+                </h4>
+                <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                    <span class="lang-en">Effortless, continuous resonance (like <em>So-Ham</em>) happening spontaneously in the heart center 21,600 times a day with every breath.</span>
+                    <span class="lang-hi">बिना किसी प्रयास के हर श्वास के साथ हृदय में स्वतः चलने वाला नाद (24 घंटे में 21,600 बार 'सोऽहं' की ध्वनि)। यह समाधि का द्वार है।</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Effects of Mantra Jaap -->
+        <div class="sacred-card rounded-2xl p-8 sm:p-10">
+            <h3 class="text-2xl font-bold text-slate-900 dark:text-white mb-6 text-center">
+                <span class="lang-en">How Mantra Jaap Transforms Body, Mind & Karma</span>
+                <span class="lang-hi">मंत्र जाप का शरीर, मन और आभा मंडल पर वैज्ञानिक व आध्यात्मिक प्रभाव</span>
+            </h3>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="p-5 rounded-xl bg-amber-50/70 dark:bg-white/[0.03] border border-amber-900/10 dark:border-white/5">
+                    <div class="text-amber-800 dark:text-amber-400 font-bold mb-2">
+                        <span class="lang-en">1. Tongue-Palate Neuro-Reflexology</span>
+                        <span class="lang-hi">1. तालु के 84 एक्यूप्रेशर बिंदुओं का जागरण</span>
+                    </div>
+                    <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <span class="lang-en">The roof of the mouth contains 84 meridian points connected to the hypothalamus and pineal gland. Sanskrit pronunciation strikes these exact points.</span>
+                        <span class="lang-hi">मुख के ऊपरी तालु में 84 सूक्ष्म नाड़ी बिंदु होते हैं जो पिट्यूटरी और पीनियल ग्रंथि से जुड़े हैं। संस्कृत मंत्रों के उच्चारण से ये बिंदु सक्रिय हो जाते हैं।</span>
+                    </p>
+                </div>
+
+                <div class="p-5 rounded-xl bg-amber-50/70 dark:bg-white/[0.03] border border-amber-900/10 dark:border-white/5">
+                    <div class="text-amber-800 dark:text-amber-400 font-bold mb-2">
+                        <span class="lang-en">2. Vagus Nerve & Heart Coherence</span>
+                        <span class="lang-hi">2. वेगस नर्व एवं हृदय-मस्तिष्क संतुलन</span>
+                    </div>
+                    <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <span class="lang-en">Rhythmic chanting slows respiration to ~6 breaths/minute, stimulating the Vagus nerve, lowering cortisol, and synchronizing heart-brain waves.</span>
+                        <span class="lang-hi">लयबद्ध मंत्र जाप से श्वास की गति शांत होती है, तनाव हार्मोन (कॉर्टिसोल) घटता है और हृदय तथा मस्तिष्क की तरंगों में गहरा सामंजस्य स्थापित होता है।</span>
+                    </p>
+                </div>
+
+                <div class="p-5 rounded-xl bg-amber-50/70 dark:bg-white/[0.03] border border-amber-900/10 dark:border-white/5">
+                    <div class="text-amber-800 dark:text-amber-400 font-bold mb-2">
+                        <span class="lang-en">3. Cymatics & Cellular Water Restructuring</span>
+                        <span class="lang-hi">3. शरीर के जल तत्व का शुद्धिकरण (Cymatics)</span>
+                    </div>
+                    <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <span class="lang-en">The human body is ~70% water. Just as sound frequencies arrange sand into sacred mandalas, Mantra vibrations harmonize cellular structure.</span>
+                        <span class="lang-hi">मानव शरीर में 70% जल है। पवित्र मंत्रों की ध्वनि तरंगें शरीर के जल अणुओं को सुंदर ज्यामितीय रूप (श्रीयंत्र सदृश) में व्यवस्थित कर आरोग्य प्रदान करती हैं।</span>
+                    </p>
+                </div>
+
+                <div class="p-5 rounded-xl bg-amber-50/70 dark:bg-white/[0.03] border border-amber-900/10 dark:border-white/5">
+                    <div class="text-amber-800 dark:text-amber-400 font-bold mb-2">
+                        <span class="lang-en">4. Dissolving Deep Samskaras</span>
+                        <span class="lang-hi">4. पुराने कर्म संस्कारों का नाश</span>
+                    </div>
+                    <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <span class="lang-en">Every repetitive thought creates a neural/karmic groove (Samskara). Mantra Jaap overwrites anxious, destructive grooves with luminous awareness.</span>
+                        <span class="lang-hi">निरंतर मंत्र जाप चित्त में संचित भय, क्रोध और जन्मों के नकारात्मक संस्कारों को मिटाकर नए सात्विक एवं दिव्य संस्कारों का निर्माण करता है।</span>
+                    </p>
+                </div>
+
+                <div class="p-5 rounded-xl bg-amber-50/70 dark:bg-white/[0.03] border border-amber-900/10 dark:border-white/5">
+                    <div class="text-amber-800 dark:text-amber-400 font-bold mb-2">
+                        <span class="lang-en">5. Sealing Tears in the 12-Layer Aura</span>
+                        <span class="lang-hi">5. 12 आभा घेरों का सुरक्षा कवच</span>
+                    </div>
+                    <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <span class="lang-en">Continuous Jaap creates an impenetrable sonic armor (Kavacha) around the aura, repelling negative emotional projections and psychic fatigue.</span>
+                        <span class="lang-hi">मंत्र की ध्वनि तरंगें आभा मंडल (Aura) के छिद्रों को भरती हैं और चारों ओर एक अभेद्य सुरक्षा कवच बनाती हैं जो बाहरी नकारात्मक ऊर्जा से रक्षा करता है।</span>
+                    </p>
+                </div>
+
+                <div class="p-5 rounded-xl bg-amber-50/70 dark:bg-white/[0.03] border border-amber-900/10 dark:border-white/5">
+                    <div class="text-amber-800 dark:text-amber-400 font-bold mb-2">
+                        <span class="lang-en">6. Ignition of Sushumna & Kundalini</span>
+                        <span class="lang-hi">6. चक्र एवं कुण्डलिनी जागरण</span>
+                    </div>
+                    <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <span class="lang-en">Bija (seed) mantras vibrate at the exact resonant frequency of specific chakras, unlocking dormant energy centers safely and systematically.</span>
+                        <span class="lang-hi">बीज मंत्र (लं, वं, रं, यं, हं, ॐ) सीधे संबंधित चक्रों की आवृत्ति पर कंपन पैदा करते हैं, जिससे सुषुम्ना और कुण्डलिनी सहज रूप से जाग्रत होती हैं।</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. Moksha: The Ultimate Culmination -->
+    <section id="moksha" class="py-24 px-4 relative overflow-hidden">
+        <div class="max-w-5xl mx-auto sacred-card rounded-3xl p-8 sm:p-14 border border-amber-500/40 bg-gradient-to-b from-amber-500/10 via-orange-500/5 to-transparent text-center">
+            <div class="w-16 h-16 mx-auto mb-6 rounded-full bg-amber-500/20 border border-amber-500 flex items-center justify-center text-3xl text-amber-700 dark:text-amber-300 animate-pulse-slow">
+                ☸️
+            </div>
+            <span class="text-amber-800 dark:text-amber-300 text-xs font-bold uppercase tracking-widest">
+                <span class="lang-en">Stage V: The Ultimate Realization (Paramapada)</span>
+                <span class="lang-hi">पंचम चरण : परम लक्ष्य — आत्म-साक्षात्कार</span>
+            </span>
+            <h2 class="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mt-2 mb-6">
+                <span class="lang-en">Moksha (मोक्ष — Absolute Liberation)</span>
+                <span class="lang-hi">मोक्ष (परम मुक्ति एवं पूर्णत्व)</span>
+            </h2>
+            <p class="text-base sm:text-lg text-slate-700 dark:text-slate-200 max-w-3xl mx-auto leading-relaxed mb-10">
+                <span class="lang-en">
+                    <strong class="text-amber-700 dark:text-amber-300">Moksha</strong> is not a place you go to after death—it is the total dissolution of ignorance (<em>Avidya</em>) and the false ego right here, right now. It is the realization that the individual drop of consciousness (<em>Atman</em>) was never separate from the infinite cosmic ocean (<em>Brahman</em>).
+                </span>
+                <span class="lang-hi">
+                    <strong class="text-amber-700 dark:text-amber-300">मोक्ष</strong> मृत्यु के बाद मिलने वाला कोई स्थान नहीं है, बल्कि इसी जीवन में अज्ञान (अविद्या), मोह और अहंकार का पूर्ण विलय है। जब साधक यह अनुभव कर लेता है कि उसकी आत्मा (बूंद) परमात्मा रूपी अनंत महासागर (ब्रह्म) से कभी अलग थी ही नहीं—वही मोक्ष है।
+                </span>
+            </p>
+
+            <div class="grid md:grid-cols-3 gap-6 text-left mb-10">
+                <div class="p-6 rounded-2xl bg-white/80 dark:bg-black/40 border border-amber-900/10 dark:border-white/10 shadow-sm">
+                    <h4 class="text-amber-800 dark:text-amber-300 font-bold text-lg mb-2">
+                        <span class="lang-en">Freedom from Samsara</span>
+                        <span class="lang-hi">जन्म-मरण के चक्र से मुक्ति</span>
+                    </h4>
+                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <span class="lang-en">When all karmic seeds are roasted in the fire of Dhyan and Jnyana (wisdom), the compulsion of endless rebirth and suffering ceases.</span>
+                        <span class="lang-hi">जब ध्यान और ज्ञान की अग्नि में संचित कर्मों के बीज भस्म हो जाते हैं, तब पुनर्जन्म और सांसारिक दुखों का बंधन सदा के लिए समाप्त हो जाता है।</span>
+                    </p>
+                </div>
+
+                <div class="p-6 rounded-2xl bg-white/80 dark:bg-black/40 border border-amber-900/10 dark:border-white/10 shadow-sm">
+                    <h4 class="text-amber-800 dark:text-amber-300 font-bold text-lg mb-2">
+                        <span class="lang-en">Jivanmukta State</span>
+                        <span class="lang-hi">जीवन्मुक्त अवस्था</span>
+                    </h4>
+                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <span class="lang-en">Living Liberation: Walking in the world with boundless compassion, untouched by fear, sorrow, craving, or duality—acting as an instrument of the Divine.</span>
+                        <span class="lang-hi">संसार में कमल की भांति निर्लिप्त रहते हुए भय, शोक, राग-द्वेष से ऊपर उठकर असीम करुणा और समभाव में जीना ही जीवन्मुक्ति है।</span>
+                    </p>
+                </div>
+
+                <div class="p-6 rounded-2xl bg-white/80 dark:bg-black/40 border border-amber-900/10 dark:border-white/10 shadow-sm">
+                    <h4 class="text-amber-800 dark:text-amber-300 font-bold text-lg mb-2">
+                        <span class="lang-en">Sat-Chit-Ananda</span>
+                        <span class="lang-hi">सच्चिदानंद स्वरूप</span>
+                    </h4>
+                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <span class="lang-en">Abiding permanently in Eternal Truth (Sat), Pure Consciousness (Chit), and Uncaused Bliss (Ananda).</span>
+                        <span class="lang-hi">शाश्वत सत्य (सत्), शुद्ध चैतन्य (चित्) और अखंड परमानंद (आनंद) में सदा के लिए स्थापित हो जाना।</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- The Complete Flow Summary Banner -->
+            <div class="p-5 rounded-2xl bg-amber-500/15 border border-amber-600/30 text-xs sm:text-sm text-amber-950 dark:text-amber-200 font-medium">
+                <span class="lang-en">
+                    <strong>The Sacred Continuum:</strong> Asana steadies the Body → Mudra seals the Prana → Mantra purifies the Mind & Nadis → Dhyan draws in Vishwa Urja → Chakras & Kundalini Awaken → The 12-Circle Aura Radiates → <strong>Moksha Dawned.</strong>
+                </span>
+                <span class="lang-hi">
+                    <strong>संपूर्ण साधना पथ:</strong> आसन से शरीर स्थिर → मुद्रा से प्राण सुरक्षित → मंत्र जाप से मन व नाड़ी शुद्ध → ध्यान से विश्व ऊर्जा का अवतरण → सप्त चक्र व कुण्डलिनी जागरण → 12 आभा मंडल का पूर्ण विस्तार → <strong>मोक्ष की प्राप्ति।</strong>
+                </span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-amber-900/10 dark:border-white/10 py-10 text-center text-xs text-slate-500">
+        <p class="serif-title text-amber-700 dark:text-amber-400/80 text-sm mb-2 font-bold">ॐ सर्वे भवन्तु सुखिनः सर्वे सन्तु निरामयाः</p>
+        <p class="lang-en">May all beings be happy, may all beings be free from illness, may all awaken to the light within.</p>
+        <p class="lang-hi">सभी प्राणी सुखी हों, सभी निरोगी हों और सभी अपने भीतर के दिव्य प्रकाश को पहचानें।</p>
+    </footer>
+
+    <!-- Interactive JavaScript for Language Gate, Theme Toggle, Chakras & 12 Aura Circles -->
+    <script>
+        let currentLang = 'en';
+        let selectedChakraIndex = 0;
+
+        const htmlEl = document.documentElement;
+        const welcomeGate = document.getElementById('welcome-gate');
+        const mainBody = document.getElementById('main-body');
+        const langToggleText = document.getElementById('lang-toggle-text');
+
+        // Enter site from Full-Screen Language Gate
+        function enterSite(lang) {
+            setLanguage(lang);
+            welcomeGate.style.opacity = '0';
+            mainBody.classList.remove('overflow-hidden');
+            setTimeout(() => {
+                welcomeGate.style.display = 'none';
+            }, 450);
+        }
+
+        // Toggle language anytime from top navbar
+        function toggleLanguage() {
+            setLanguage(currentLang === 'en' ? 'hi' : 'en');
+        }
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            htmlEl.setAttribute('data-lang', lang);
+            langToggleText.textContent = lang === 'en' ? 'हिन्दी में पढ़ें' : 'Read in English';
+            renderChakraButtons();
+            renderChakra(selectedChakraIndex);
+            renderAuraList();
+        }
+
+        // Theme Switcher (Default: White Theme)
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+        const themeLabel = document.getElementById('theme-label');
+
+        themeToggle.addEventListener('click', () => {
+            htmlEl.classList.toggle('dark');
+            const isDark = htmlEl.classList.contains('dark');
+            themeIcon.textContent = isDark ? '☀️' : '🌙';
+            themeLabel.textContent = isDark ? 'White Theme' : 'Dark Mode';
         });
 
-        rawVideo.srcObject = stream;
-        await rawVideo.play();
+        // 7 Chakras Bilingual Data
+        const chakras = [
+            {
+                name_en: "7. Sahasrara (Crown Chakra)",
+                name_hi: "7. सहस्रार चक्र (Crown Chakra)",
+                sanskrit_en: "सहस्रार • Thousand-Petaled Lotus",
+                sanskrit_hi: "सहस्रार • हजार पंखुड़ियों वाला कमल",
+                bija: "OM / ॐ",
+                element_en: "Beyond Elements (Pure Consciousness)",
+                element_hi: "तत्वातीत (शुद्ध परम चेतना)",
+                location_en: "Crown of the Head",
+                location_hi: "सिर के शीर्ष भाग (ब्रह्मरंध्र)",
+                color: "#9333ea",
+                desc_en: "The gateway of Vishwa Urja (Cosmic Energy) and the seat of Lord Shiva (Pure Awareness). When Kundalini reaches Sahasrara, duality dissolves into Samadhi and Moksha.",
+                desc_hi: "यह विश्व ऊर्जा के प्रवेश का मुख्य द्वार और परम शिव का स्थान है। जब कुण्डलिनी सहस्रार में पहुँचती है, तब साधक को निर्विकल्प समाधि और मोक्ष की प्राप्ति होती है।"
+            },
+            {
+                name_en: "6. Ajna (Third Eye Chakra)",
+                name_hi: "6. आज्ञा चक्र (Third Eye Chakra)",
+                sanskrit_en: "आज्ञा • Command Center",
+                sanskrit_hi: "आज्ञा • दिव्य दृष्टि एवं ज्ञान केंद्र",
+                bija: "OM (ॐ)",
+                element_en: "Mahat / Light & Mind",
+                element_hi: "महत् तत्व / प्रकाश एवं मन",
+                location_en: "Between the Eyebrows",
+                location_hi: "दोनों भौंहों के मध्य (भ्रूमध्य)",
+                color: "#4f46e5",
+                desc_en: "Convergence point of Ida, Pingala, and Sushumna Nadis. Governs intuition, inner vision (Divya Drishti), wisdom, and mastery over thought.",
+                desc_hi: "यहाँ इड़ा, पिंगला और सुषुम्ना तीनों नाड़ियों का संगम (त्रिवेणी) होता है। यह अंतर्ज्ञान, दिव्य दृष्टि, विवेक और संकल्प शक्ति का केंद्र है।"
+            },
+            {
+                name_en: "5. Vishuddha (Throat Chakra)",
+                name_hi: "5. विशुद्ध चक्र (Throat Chakra)",
+                sanskrit_en: "विशुद्ध • Center of Purification",
+                sanskrit_hi: "विशुद्ध • शुद्धिकरण एवं वाणी का केंद्र",
+                bija: "HAM (हं)",
+                element_en: "Akasha (Ether / Space)",
+                element_hi: "आकाश तत्व",
+                location_en: "Throat Region",
+                location_hi: "कंठ प्रदेश",
+                color: "#0284c7",
+                desc_en: "Center of Vaak Siddhi (power of truth in speech), sound vibration, Mantra resonance, and purifying toxic energies into nectar.",
+                desc_hi: "यह मंत्र शक्ति, नाद, वाक्-सिद्धि (सत्य वाणी) और विषैली ऊर्जाओं को अमृत में बदलने वाला चक्र है।"
+            },
+            {
+                name_en: "4. Anahata (Heart Chakra)",
+                name_hi: "4. अनाहत चक्र (Heart Chakra)",
+                sanskrit_en: "अनाहत • Unstruck Sound",
+                sanskrit_hi: "अनाहत • बिना टकराहट की दिव्य ध्वनि",
+                bija: "YAM (यं)",
+                element_en: "Vayu (Air)",
+                element_hi: "वायु तत्व",
+                location_en: "Center of the Chest",
+                location_hi: "हृदय केंद्र",
+                color: "#16a34a",
+                desc_en: "Bridge between the lower three physical chakras and upper three spiritual chakras. Seat of unconditional love, Bhakti, Ajapa Jaap, and cosmic empathy.",
+                desc_hi: "यह नीचे के तीन भौतिक चक्रों और ऊपर के तीन आध्यात्मिक चक्रों के बीच का सेतु है। यह निस्वार्थ प्रेम, भक्ति, करुणा और अजपा जाप का केंद्र है।"
+            },
+            {
+                name_en: "3. Manipura (Solar Plexus Chakra)",
+                name_hi: "3. मणिपूर चक्र (Solar Plexus)",
+                sanskrit_en: "मणिपूर • City of Jewels",
+                sanskrit_hi: "मणिपूर • मणियों का नगर (नाभि केंद्र)",
+                bija: "RAM (रं)",
+                element_en: "Agni (Fire)",
+                element_hi: "अग्नि तत्व",
+                location_en: "Navel Center",
+                location_hi: "नाभि केंद्र",
+                color: "#ca8a04",
+                desc_en: "The sun center of the body where the 72,000 Nadis distribute Prana. Governs willpower, spiritual fire (Tapas), digestion, and personal transformation.",
+                desc_hi: "यह शरीर का सूर्य केंद्र है जहाँ से 72,000 नाड़ियों में प्राण वितरित होता है। यह आत्मबल, तेज, पाचन अग्नि और तपस्या का संचालन करता है।"
+            },
+            {
+                name_en: "2. Svadhisthana (Sacral Chakra)",
+                name_hi: "2. स्वाधिष्ठान चक्र (Sacral Chakra)",
+                sanskrit_en: "स्वाधिष्ठान • One's Own Abode",
+                sanskrit_hi: "स्वाधिष्ठान • प्राण एवं सृजन का निवास",
+                bija: "VAM (वं)",
+                element_en: "Jala (Water)",
+                element_hi: "जल तत्व",
+                location_en: "Lower Abdomen",
+                location_hi: "नाभि के नीचे (पेडू भाग)",
+                color: "#ea580c",
+                desc_en: "Governs fluidity, creative life-force (Ojas), emotional flow, and the transmutation of sensual desire into spiritual creativity.",
+                desc_hi: "यह जल तत्व, भावनात्मक संतुलन, रचनात्मकता और प्राण ऊर्जा को ओजस में रूपांतरित करने का केंद्र है।"
+            },
+            {
+                name_en: "1. Muladhara (Root Chakra)",
+                name_hi: "1. मूलाधार चक्र (Root Chakra)",
+                sanskrit_en: "मूलाधार • Root Foundation",
+                sanskrit_hi: "मूलाधार • सूक्ष्म शरीर की नींव",
+                bija: "LAM (लं)",
+                element_en: "Prithvi (Earth)",
+                element_hi: "पृथ्वी तत्व",
+                location_en: "Base of the Spine",
+                location_hi: "रीढ़ की हड्डी का मूल आधार",
+                color: "#dc2626",
+                desc_en: "Foundation of the subtle body where Kundalini Shakti rests coiled and where Ida, Pingala, and Sushumna originate. Governs stability and grounding.",
+                desc_hi: "यहीं पर कुण्डलिनी महाशक्ति निवास करती है और इड़ा, पिंगला व सुषुम्ना का उद्गम होता है। यह शारीरिक स्थिरता, सुरक्षा और धैर्य का आधार है।"
+            }
+        ];
 
-        // Feed raw frames through MediaPipe
-        const cameraFeed = new Camera(rawVideo, {
-          onFrame: async () => {
-            await selfieSegmentation.send({ image: rawVideo });
-          },
-          width: 640,
-          height: 480
+        const btnContainer = document.getElementById('chakra-buttons');
+        const detailContainer = document.getElementById('chakra-detail');
+
+        function renderChakraButtons() {
+            btnContainer.innerHTML = '';
+            chakras.forEach((c, i) => {
+                const btn = document.createElement('button');
+                const title = currentLang === 'en' ? c.name_en : c.name_hi;
+                btn.innerHTML = `
+                    <span class="flex items-center gap-3">
+                        <span class="w-3 h-3 rounded-full" style="background:${c.color}"></span>
+                        <span class="text-sm">${title}</span>
+                    </span>
+                    <span class="text-xs opacity-75 font-semibold">${c.bija}</span>
+                `;
+                btn.onclick = () => renderChakra(i);
+                btnContainer.appendChild(btn);
+            });
+        }
+
+        function renderChakra(index) {
+            selectedChakraIndex = index;
+            const c = chakras[index];
+            const isEn = currentLang === 'en';
+            detailContainer.innerHTML = `
+                <div class="flex items-center justify-between mb-4">
+                    <span class="px-3 py-1 rounded-full text-xs font-bold uppercase" style="background:${c.color}18; color:${c.color}; border:1px solid ${c.color}45">
+                        ${isEn ? 'Bija Mantra:' : 'बीज मंत्र:'} ${c.bija}
+                    </span>
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">${isEn ? c.location_en : c.location_hi}</span>
+                </div>
+                <h4 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-1">${isEn ? c.name_en : c.name_hi}</h4>
+                <p class="text-sm font-semibold mb-4" style="color:${c.color}">${isEn ? c.sanskrit_en : c.sanskrit_hi} • ${isEn ? 'Element:' : 'तत्व:'} ${isEn ? c.element_en : c.element_hi}</p>
+                <p class="text-slate-700 dark:text-slate-300 text-sm sm:text-base leading-relaxed">${isEn ? c.desc_en : c.desc_hi}</p>
+            `;
+            Array.from(btnContainer.children).forEach((btn, i) => {
+                btn.className = `w-full text-left px-4 py-3 rounded-xl transition flex items-center justify-between border ${
+                    i === index
+                        ? 'bg-amber-500/15 dark:bg-white/10 border-amber-500 text-slate-900 dark:text-white font-bold shadow-sm'
+                        : 'bg-white/60 dark:bg-white/[0.02] border-slate-200/80 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:bg-amber-500/5'
+                }`;
+            });
+        }
+
+        // 12 Circles of Aura Bilingual Data
+        const auraCircles = [
+            { ring: 1, name_en: "Annamaya Etheric Rim", name_hi: "अन्नमय प्राणिक घेरा", color: "#dc2626", desc_en: "1–2 inches from skin. Blueprint of physical vitality, immunity, and organ health.", desc_hi: "त्वचा से 1-2 इंच बाहर। शारीरिक स्वास्थ्य, रोग-प्रतिरोधक क्षमता और जीवन-शक्ति का सुरक्षा घेरा।" },
+            { ring: 2, name_en: "Pranic Fluid Sphere", name_hi: "प्राणमय भावनात्मक घेरा", color: "#ea580c", desc_en: "Regulates emotional tides, breath circulation, and sensory impressions.", desc_hi: "श्वास के प्रवाह, भावनाओं के संतुलन और इंद्रियों की ऊर्जा को नियंत्रित करता है।" },
+            { ring: 3, name_en: "Manomaya Mental Ring", name_hi: "मनोमय वैचारिक घेरा", color: "#ca8a04", desc_en: "Radiates thought-forms, willpower, and intellectual clarity.", desc_hi: "हमारे विचारों की तरंगें, संकल्प शक्ति और बौद्धिक स्पष्टता इसी घेरे से प्रसारित होती हैं।" },
+            { ring: 4, name_en: "Anahata Astral Bridge", name_hi: "अनाहत करुणा घेरा", color: "#16a34a", desc_en: "Field of heartfelt empathy, forgiveness, and connection to all living beings.", desc_hi: "निस्वार्थ प्रेम, क्षमा, सहानुभूति और समस्त जीवों से आत्मिक जुड़ाव का क्षेत्र।" },
+            { ring: 5, name_en: "Nada Sonic Shield", name_hi: "नाद एवं मंत्र कवच घेरा", color: "#0891b2", desc_en: "Activated by Mantra Jaap; structures speech and protects from external negativity.", desc_hi: "मंत्र जाप से जाग्रत होने वाला यह घेरा बाहरी नकारात्मक ऊर्जा से पूर्ण रक्षा करता है।" },
+            { ring: 6, name_en: "Vijnanamaya Intuitive Sphere", name_hi: "विज्ञानमय प्रज्ञा घेरा", color: "#2563eb", desc_en: "Awakens inner foresight, lucid awareness, and discernment (Viveka).", desc_hi: "अंतर्ज्ञान, दूरदर्शिता, साक्षी भाव और सत्य-असत्य के विवेक को जाग्रत करता है।" },
+            { ring: 7, name_en: "Karmic Akashic Ring", name_hi: "कार्मिक संस्कार घेरा", color: "#4f46e5", desc_en: "Stores soul memories and Samskaras across lifetimes; purified by deep Dhyan.", desc_hi: "पूर्व जन्मों की स्मृतियों और संस्कारों का स्तर, जो गहरे ध्यान से शुद्ध व निर्मल होता है।" },
+            { ring: 8, name_en: "Anandamaya Causal Halo", name_hi: "आनंदमय कारण घेरा", color: "#7c3aed", desc_en: "Radiates uncaused peace and bliss; untouched by external life turbulence.", desc_hi: "अकारण शांति और आत्मिक आनंद का घेरा जो बाहरी दुख-सुख से अप्रभावित रहता है।" },
+            { ring: 9, name_en: "Siddha Magnetic Field", name_hi: "सिद्ध चुंबकीय आभा घेरा", color: "#9333ea", desc_en: "Natural healing presence; uplifts and calms anyone entering its radius.", desc_hi: "इस घेरे के जाग्रत होने पर साधक के सान्निध्य मात्र से दूसरों को शांति और आरोग्य मिलता है।" },
+            { ring: 10, name_en: "Surya Tejas Sphere", name_hi: "सूर्य तेजस मंडल", color: "#c026d3", desc_en: "Luminous solar radiance generated by awakened Kundalini and Ojas.", desc_hi: "कुण्डलिनी जागरण और ऊर्ध्वरेता ओजस से उत्पन्न होने वाला दिव्य स्वर्णिम तेज।" },
+            { ring: 11, name_en: "Vishwa Urja Cosmic Conduit", name_hi: "विश्व ऊर्जा संवाहक घेरा", color: "#d97706", desc_en: "Direct communion with universal intelligence and cosmic life-force.", desc_hi: "ब्रह्माण्डीय चेतना और अनंत विश्व ऊर्जा के साथ निरंतर सीधा संपर्क स्थापित करने वाला घेरा।" },
+            { ring: 12, name_en: "Moksha Prabhamandal", name_hi: "मोक्ष प्रभामंडल (पूर्णत्व)", color: "#eab308", desc_en: "The 12th sovereign ring of pure gold-white light signifying oneness with Brahman.", desc_hi: "बारहवां परम उज्ज्वल स्वर्ण-श्वेत घेरा जो जीव और ब्रह्म के पूर्ण एकत्व (मोक्ष) का प्रतीक है।" }
+        ];
+
+        const visualizer = document.getElementById('aura-visualizer');
+        const auraList = document.getElementById('aura-list');
+
+        // Create 12 visual rings once
+        auraCircles.forEach((a, idx) => {
+            const size = 90 + (idx + 1) * 20;
+            const ringEl = document.createElement('div');
+            ringEl.id = `ring-${a.ring}`;
+            ringEl.className = 'aura-ring';
+            ringEl.style.width = `${size}px`;
+            ringEl.style.height = `${size}px`;
+            ringEl.style.border = `1px solid ${a.color}66`;
+            visualizer.appendChild(ringEl);
         });
 
-        await cameraFeed.start();
+        function renderAuraList() {
+            auraList.innerHTML = '';
+            const isEn = currentLang === 'en';
+            auraCircles.forEach(a => {
+                const card = document.createElement('div');
+                card.className = 'sacred-card p-3.5 rounded-xl cursor-pointer border border-slate-200 dark:border-white/5 hover:border-amber-500';
+                card.innerHTML = `
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="w-2.5 h-2.5 rounded-full" style="background:${a.color}"></span>
+                        <span class="text-xs font-bold text-slate-900 dark:text-white">
+                            ${isEn ? `Circle ${a.ring}: ${a.name_en}` : `घेरा ${a.ring}: ${a.name_hi}`}
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-snug">${isEn ? a.desc_en : a.desc_hi}</p>
+                `;
+                card.onmouseenter = () => highlightRing(a.ring, a.color);
+                card.onclick = () => highlightRing(a.ring, a.color);
+                auraList.appendChild(card);
+            });
+        }
 
-        cameraBtn.disabled = true;
-        recordBtn.disabled = false;
-        statusText.textContent = 'AI ready. Pick a background color.';
-      } catch (err) {
-        console.error(err);
-        statusText.textContent = 'Failed to load camera or AI model.';
-      }
-    });
+        function highlightRing(ringNum, color) {
+            auraCircles.forEach(a => {
+                const el = document.getElementById(`ring-${a.ring}`);
+                if (a.ring === ringNum) {
+                    el.style.border = `2.5px solid ${color}`;
+                    el.style.boxShadow = `0 0 22px ${color}66, inset 0 0 12px ${color}33`;
+                } else {
+                    el.style.border = `1px solid ${a.color}45`;
+                    el.style.boxShadow = 'none';
+                }
+            });
+        }
 
-    // 4. Determine Safe Codec
-    function getSupportedMimeType() {
-      const candidateTypes = [
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus',
-        'video/webm',
-        'video/mp4;codecs=avc1,mp4a.40.2',
-        'video/mp4'
-      ];
-      return candidateTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
-    }
-
-    // 5. Start Recording (Canvas stream + Mic Audio)
-    recordBtn.addEventListener('click', () => {
-      recordedChunks = [];
-      chosenMimeType = getSupportedMimeType();
-
-      // Capture processed stream directly from Canvas at 30 FPS
-      const canvasStream = outputCanvas.captureStream(30);
-
-      // Extract microphone audio track from the original webcam stream
-      const audioTrack = stream.getAudioTracks()[0];
-      if (audioTrack) {
-        canvasStream.addTrack(audioTrack);
-      }
-
-      try {
-        mediaRecorder = new MediaRecorder(canvasStream, chosenMimeType ? { mimeType: chosenMimeType } : undefined);
-      } catch (err) {
-        mediaRecorder = new MediaRecorder(canvasStream);
-      }
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        const fileExt = chosenMimeType.includes('mp4') ? 'mp4' : 'webm';
-        const blob = new Blob(recordedChunks, { type: chosenMimeType || 'video/webm' });
-        const videoUrl = URL.createObjectURL(blob);
-
-        recordedPlayback.src = videoUrl;
-        downloadBtn.disabled = false;
-        recordBtn.disabled = false;
-        stopBtn.disabled = true;
-        statusText.textContent = 'Ready to preview or save.';
-
-        downloadBtn.onclick = () => {
-          const a = document.createElement('a');
-          a.style.display = 'none';
-          a.href = videoUrl;
-          a.download = `segmented-recording-${Date.now()}.${fileExt}`;
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(() => document.body.removeChild(a), 100);
-        };
-      };
-
-      mediaRecorder.start(500);
-      recordBtn.disabled = true;
-      stopBtn.disabled = false;
-      downloadBtn.disabled = true;
-      statusText.innerHTML = '<span class="recording-dot"></span> Recording with custom background...';
-    });
-
-    // 6. Stop Recording
-    stopBtn.addEventListener('click', () => {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-      }
-    });
-  </script>
+        // Initial render
+        setLanguage('en');
+        highlightRing(12, '#eab308');
+    </script>
 </body>
 </html>
